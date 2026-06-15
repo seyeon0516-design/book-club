@@ -3,85 +3,110 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, BookOpen, Quote, Edit3, Check } from "lucide-react"
-import type { Book, Thread, Reply } from "@/lib/types"
+import { X, BookOpen, Pencil, Check, Upload } from "lucide-react"
+import type { Book, Thread, Reply, BookImpression } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { ThreadList } from "@/components/thread-list"
+import { ImpressionList } from "@/components/impression-list"
 import { Button } from "@/components/ui/button"
+
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=1000&auto=format&fit=crop"
 
 interface BookDetailModalProps {
   book: Book
   isOpen: boolean
   onClose: () => void
   onUpdate: () => void
+  speakers: string[]
+  onAddSpeaker: (name: string) => void
 }
 
-export function BookDetailModal({ book, isOpen, onClose, onUpdate }: BookDetailModalProps) {
+export function BookDetailModal({ book, isOpen, onClose, onUpdate, speakers, onAddSpeaker }: BookDetailModalProps) {
   const [threads, setThreads] = useState<Thread[]>([])
+  const [impressions, setImpressions] = useState<BookImpression[]>([])
   const [loading, setLoading] = useState(true)
-  const [impressions, setImpressions] = useState(book.impressions || "")
-  const [isEditingImpressions, setIsEditingImpressions] = useState(false)
-  const [isSavingImpressions, setIsSavingImpressions] = useState(false)
+
+  // book editing
+  const [isEditingBook, setIsEditingBook] = useState(false)
+  const [editTitle, setEditTitle] = useState(book.title)
+  const [editAuthor, setEditAuthor] = useState(book.author)
+  const [editDate, setEditDate] = useState(book.date)
+  const [editImage, setEditImage] = useState<string>(book.image)
 
   const supabase = createClient()
 
-  const fetchThreads = async () => {
+  const fetchData = async () => {
     setLoading(true)
-    const { data: threadsData, error: threadsError } = await supabase
+    const { data: threadsData } = await supabase
       .from("threads")
       .select("*")
       .eq("book_id", book.id)
       .order("created_at", { ascending: true })
 
-    if (threadsError || !threadsData) {
-      setLoading(false)
-      return
-    }
-
-    const threadIds = threadsData.map((t) => t.id)
-    
-    if (threadIds.length === 0) {
-      setThreads([])
-      setLoading(false)
-      return
-    }
-
-    const { data: repliesData } = await supabase
-      .from("replies")
+    const { data: impressionsData } = await supabase
+      .from("book_impressions")
       .select("*")
-      .in("thread_id", threadIds)
+      .eq("book_id", book.id)
       .order("created_at", { ascending: true })
 
-    const threadsWithReplies = threadsData.map((thread) => ({
-      ...thread,
-      replies: repliesData?.filter((r: Reply) => r.thread_id === thread.id) || [],
-    }))
+    setImpressions(impressionsData || [])
 
-    setThreads(threadsWithReplies)
+    if (threadsData && threadsData.length > 0) {
+      const threadIds = threadsData.map((t) => t.id)
+      const { data: repliesData } = await supabase
+        .from("replies")
+        .select("*")
+        .in("thread_id", threadIds)
+        .order("created_at", { ascending: true })
+
+      setThreads(
+        threadsData.map((thread) => ({
+          ...thread,
+          replies: repliesData?.filter((r: Reply) => r.thread_id === thread.id) || [],
+        })),
+      )
+    } else {
+      setThreads([])
+    }
     setLoading(false)
   }
 
-  const saveImpressions = async () => {
-    setIsSavingImpressions(true)
-    const { error } = await supabase
-      .from("books")
-      .update({ impressions: impressions.trim() })
-      .eq("id", book.id)
-
-    if (!error) {
-      setIsEditingImpressions(false)
-      onUpdate()
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => setEditImage(reader.result as string)
+      reader.readAsDataURL(file)
     }
-    setIsSavingImpressions(false)
+  }
+
+  const saveBookEdit = async () => {
+    await supabase
+      .from("books")
+      .update({
+        title: editTitle.trim(),
+        author: editAuthor.trim() || "작자미상",
+        date: editDate.trim(),
+        image: editImage,
+      })
+      .eq("id", book.id)
+    setIsEditingBook(false)
+    onUpdate()
   }
 
   useEffect(() => {
     if (isOpen) {
-      fetchThreads()
-      setImpressions(book.impressions || "")
+      fetchData()
+      setEditTitle(book.title)
+      setEditAuthor(book.author)
+      setEditDate(book.date)
+      setEditImage(book.image)
+      setIsEditingBook(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, book.id, book.impressions])
+  }, [isOpen, book.id])
+
+  const hasImage = book.image && book.image !== DEFAULT_IMAGE
 
   return (
     <AnimatePresence>
@@ -102,85 +127,105 @@ export function BookDetailModal({ book, isOpen, onClose, onUpdate }: BookDetailM
             className="fixed inset-4 md:inset-10 lg:inset-20 bg-background rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col"
           >
             <div className="relative h-48 md:h-56 flex-shrink-0">
-              {book.image && book.image !== "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=1000&auto=format&fit=crop" ? (
-                <Image
-                  src={book.image}
-                  alt={book.title}
-                  fill
-                  className="object-cover"
-                />
+              {hasImage ? (
+                <Image src={book.image} alt={book.title} fill className="object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-primary/20 via-secondary to-accent/20 flex items-center justify-center">
                   <BookOpen className="h-16 w-16 text-primary/40" />
                 </div>
               )}
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background" />
-              <button
-                onClick={onClose}
-                className="absolute top-4 right-4 p-2 rounded-full bg-background/80 hover:bg-background transition-colors"
-              >
-                <X className="h-5 w-5 text-foreground" />
-              </button>
-              <div className="absolute bottom-4 left-6 right-6">
-                <h2 className="text-2xl md:text-3xl font-bold text-foreground drop-shadow-lg">{book.title}</h2>
-                <p className="text-muted-foreground mt-1 drop-shadow">{book.author} | {book.date}</p>
+              <div className="absolute top-4 right-4 flex gap-2">
+                {!isEditingBook && (
+                  <button
+                    onClick={() => setIsEditingBook(true)}
+                    className="p-2 rounded-full bg-background/80 hover:bg-background transition-colors"
+                  >
+                    <Pencil className="h-5 w-5 text-foreground" />
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full bg-background/80 hover:bg-background transition-colors"
+                >
+                  <X className="h-5 w-5 text-foreground" />
+                </button>
               </div>
+              {!isEditingBook && (
+                <div className="absolute bottom-4 left-6 right-6">
+                  <h2 className="text-2xl md:text-3xl font-bold text-foreground drop-shadow-lg">{book.title}</h2>
+                  <p className="text-muted-foreground mt-1 drop-shadow">
+                    {book.author} | {book.date}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Impressions Section */}
-              <div className="bg-secondary/30 rounded-xl p-4 border border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Quote className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold text-foreground">인상깊은 문장 / 감상평</h3>
-                  </div>
-                  {isEditingImpressions ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={saveImpressions}
-                      disabled={isSavingImpressions}
-                    >
+              {isEditingBook && (
+                <div className="bg-secondary/30 rounded-xl p-4 border border-border space-y-3">
+                  <h3 className="font-semibold text-foreground">책 정보 수정</h3>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="책 제목"
+                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <input
+                    type="text"
+                    value={editAuthor}
+                    onChange={(e) => setEditAuthor(e.target.value)}
+                    placeholder="저자"
+                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <input
+                    type="text"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    placeholder="날짜"
+                    className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <label className="flex items-center gap-2 text-sm text-primary cursor-pointer">
+                    <Upload className="h-4 w-4" />
+                    표지 이미지 변경
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                  {editImage && editImage !== DEFAULT_IMAGE && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={editImage} alt="미리보기" className="h-24 w-auto rounded-md object-cover" />
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingBook(false)}>
+                      취소
+                    </Button>
+                    <Button size="sm" onClick={saveBookEdit} disabled={!editTitle.trim()}>
                       <Check className="h-4 w-4 mr-1" />
                       저장
                     </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setIsEditingImpressions(true)}
-                    >
-                      <Edit3 className="h-4 w-4 mr-1" />
-                      편집
-                    </Button>
-                  )}
+                  </div>
                 </div>
-                {isEditingImpressions ? (
-                  <textarea
-                    value={impressions}
-                    onChange={(e) => setImpressions(e.target.value)}
-                    placeholder="이 책에서 인상깊었던 문장이나 감상평을 자유롭게 남겨주세요..."
-                    rows={4}
-                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {impressions || "아직 작성된 내용이 없습니다. 편집 버튼을 눌러 추가해보세요."}
-                  </p>
-                )}
-              </div>
+              )}
 
-              {/* Threads Section */}
+              <ImpressionList
+                bookId={book.id}
+                impressions={impressions}
+                speakers={speakers}
+                onUpdate={fetchData}
+                onAddSpeaker={onAddSpeaker}
+              />
+
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
               ) : (
-                <ThreadList 
-                  bookId={book.id} 
-                  threads={threads} 
-                  onThreadAdded={fetchThreads} 
+                <ThreadList
+                  bookId={book.id}
+                  threads={threads}
+                  speakers={speakers}
+                  onThreadAdded={fetchData}
+                  onAddSpeaker={onAddSpeaker}
                 />
               )}
             </div>
@@ -194,10 +239,13 @@ export function BookDetailModal({ book, isOpen, onClose, onUpdate }: BookDetailM
 interface BookCardProps {
   book: Book
   onUpdate: () => void
+  speakers: string[]
+  onAddSpeaker: (name: string) => void
 }
 
-export function BookCard({ book, onUpdate }: BookCardProps) {
+export function BookCard({ book, onUpdate, speakers, onAddSpeaker }: BookCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const hasImage = book.image && book.image !== DEFAULT_IMAGE
 
   return (
     <>
@@ -209,7 +257,7 @@ export function BookCard({ book, onUpdate }: BookCardProps) {
         onClick={() => setIsModalOpen(true)}
       >
         <div className="relative aspect-[3/4] rounded-xl overflow-hidden shadow-lg border border-border">
-          {book.image && book.image !== "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=1000&auto=format&fit=crop" ? (
+          {hasImage ? (
             <Image
               src={book.image}
               alt={book.title}
@@ -234,12 +282,14 @@ export function BookCard({ book, onUpdate }: BookCardProps) {
           </div>
         </div>
       </motion.div>
-      
-      <BookDetailModal 
-        book={book} 
-        isOpen={isModalOpen} 
+
+      <BookDetailModal
+        book={book}
+        isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={onUpdate}
+        speakers={speakers}
+        onAddSpeaker={onAddSpeaker}
       />
     </>
   )
