@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, BookOpen, Pencil, Check, Upload } from "lucide-react"
+import { X, BookOpen, Pencil, Check, Upload, Trash2 } from "lucide-react"
 import type { Book, Thread, Reply, BookImpression } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { ThreadList } from "@/components/thread-list"
@@ -91,6 +91,13 @@ export function BookDetailModal({ book, isOpen, onClose, onUpdate, speakers, onA
       })
       .eq("id", book.id)
     setIsEditingBook(false)
+    onUpdate()
+  }
+
+  const deleteBook = async () => {
+    if (!confirm(`"${book.title}" 책을 삭제하시겠어요? 모든 대화와 감상평이 함께 삭제됩니다.`)) return
+    await supabase.from("books").delete().eq("id", book.id)
+    onClose()
     onUpdate()
   }
 
@@ -195,14 +202,25 @@ export function BookDetailModal({ book, isOpen, onClose, onUpdate, speakers, onA
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={editImage} alt="미리보기" className="h-24 w-auto rounded-md object-cover" />
                   )}
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingBook(false)}>
-                      취소
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={deleteBook}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      책 삭제
                     </Button>
-                    <Button size="sm" onClick={saveBookEdit} disabled={!editTitle.trim()}>
-                      <Check className="h-4 w-4 mr-1" />
-                      저장
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingBook(false)}>
+                        취소
+                      </Button>
+                      <Button size="sm" onClick={saveBookEdit} disabled={!editTitle.trim()}>
+                        <Check className="h-4 w-4 mr-1" />
+                        저장
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}

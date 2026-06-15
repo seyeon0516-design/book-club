@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, ChevronUp, MessageCircle, Plus, Send, ThumbsUp, Pencil, Check, X } from "lucide-react"
+import { ChevronDown, ChevronUp, MessageCircle, Plus, Send, ThumbsUp, Pencil, Check, X, Trash2 } from "lucide-react"
 import type { Thread, Reply } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -109,6 +109,18 @@ export function ThreadList({ bookId, threads, speakers, onThreadAdded, onAddSpea
     if (!editReplyContent.trim()) return
     await supabase.from("replies").update({ content: editReplyContent.trim() }).eq("id", replyId)
     setEditingReply(null)
+    onThreadAdded()
+  }
+
+  const deleteThread = async (threadId: number) => {
+    if (!confirm("이 대화 주제를 삭제하시겠어요? 답글도 함께 삭제됩니다.")) return
+    await supabase.from("threads").delete().eq("id", threadId)
+    onThreadAdded()
+  }
+
+  const deleteReply = async (replyId: number) => {
+    if (!confirm("이 답글을 삭제하시겠어요?")) return
+    await supabase.from("replies").delete().eq("id", replyId)
     onThreadAdded()
   }
 
@@ -233,15 +245,23 @@ export function ThreadList({ bookId, threads, speakers, onThreadAdded, onAddSpea
                       ) : (
                         <div className="flex items-start justify-between gap-2 mb-4">
                           <p className="text-foreground text-sm whitespace-pre-wrap flex-1">{thread.content}</p>
-                          <button
-                            onClick={() => {
-                              setEditingThread(thread.id)
-                              setEditThreadContent(thread.content)
-                            }}
-                            className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingThread(thread.id)
+                                setEditThreadContent(thread.content)
+                              }}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteThread(thread.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -267,6 +287,12 @@ export function ThreadList({ bookId, threads, speakers, onThreadAdded, onAddSpea
                                     className="text-muted-foreground hover:text-primary transition-colors"
                                   >
                                     <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteReply(reply.id)}
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
                                   </button>
                                 </div>
                               </div>

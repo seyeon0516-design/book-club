@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Quote, Plus, Pencil, Check, X } from "lucide-react"
+import { Quote, Plus, Pencil, Check, X, Trash2 } from "lucide-react"
 import type { BookImpression } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,12 @@ export function ImpressionList({ bookId, impressions, speakers, onUpdate, onAddS
     if (!editContent.trim()) return
     await supabase.from("book_impressions").update({ content: editContent.trim() }).eq("id", id)
     setEditingId(null)
+    onUpdate()
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("이 감상평을 삭제하시겠어요?")) return
+    await supabase.from("book_impressions").delete().eq("id", id)
     onUpdate()
   }
 
@@ -109,15 +115,23 @@ export function ImpressionList({ bookId, impressions, speakers, onUpdate, onAddS
             <div key={imp.id} className="bg-card rounded-lg p-3 border border-border">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium text-primary text-sm">{imp.speaker}</span>
-                <button
-                  onClick={() => {
-                    setEditingId(imp.id)
-                    setEditContent(imp.content)
-                  }}
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingId(imp.id)
+                      setEditContent(imp.content)
+                    }}
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(imp.id)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               {editingId === imp.id ? (
                 <div className="space-y-2">
