@@ -19,13 +19,21 @@ export default function HomePage() {
 
   const fetchBooks = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from("books")
-      .select("*")
-      .order("created_at", { ascending: false })
+    const { data, error } = await supabase.from("books").select("*")
 
     if (!error && data) {
-      setBooks(data)
+      const toMeetingDate = (date: string) => {
+        const normalized = date.trim().replace(/[./]/g, "-").replace(/-$/, "")
+        const timestamp = Date.parse(normalized)
+        return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp
+      }
+
+      setBooks(
+        [...data].sort((a, b) => {
+          const dateDifference = toMeetingDate(b.date) - toMeetingDate(a.date)
+          return dateDifference !== 0 ? dateDifference : b.created_at.localeCompare(a.created_at)
+        }),
+      )
     }
     setLoading(false)
   }
