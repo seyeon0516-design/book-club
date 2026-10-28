@@ -30,8 +30,8 @@ export default function HomePage() {
 
       setBooks(
         [...data].sort((a, b) => {
-          const dateDifference = toMeetingDate(a.date) - toMeetingDate(b.date)
-          return dateDifference !== 0 ? dateDifference : a.created_at.localeCompare(b.created_at)
+          const dateDifference = toMeetingDate(b.date) - toMeetingDate(a.date)
+          return dateDifference !== 0 ? dateDifference : b.created_at.localeCompare(a.created_at)
         }),
       )
     }
